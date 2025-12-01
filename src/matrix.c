@@ -74,150 +74,38 @@ matrix matrix_sub(const matrix *A, const matrix *B)
     return C;
 }
 
-matrix matrix_mult(const matrix *A, const matrix *B)
+matrix matrix_mult(const matrix *A, const matrix *B) // Matrix mult v2: cache optimized
 {
     const int rowsA = A->rows;
     const int colsA = A->cols;
     const int rowsB = B->rows;
     const int colsB = B->cols;
     assert(colsA == rowsB);
+    
     matrix C = new_matrix(rowsA, colsB);
+    matrix Btranspose = new_matrix(colsB, rowsB);  // FIX: Swap dimensions
+    
+    // FIX: Correct transposition
+    for (int i = 1; i <= rowsB; i++)
+        for (int j = 1; j <= colsB; j++)
+        {
+            mget(Btranspose, j, i) = mgetp(B, i, j);
+        }
+    
+    // Now both accesses are row-wise (cache-friendly)
     for (int i = 1; i <= rowsA; i++)
         for (int j = 1; j <= colsB; j++)
+        {
+            double sum = 0.0;
             for (int k = 1; k <= colsA; k++)
             {
-                mget(C, i, j) += mgetp(A, i, k) * mgetp(B, k, j);
+                sum += mgetp(A, i, k) * mget(Btranspose, j, k);
             }
+            mget(C, i, j) = sum;
+        }
+    
+    delete_matrix(&Btranspose);
     return C;
-}
-
-matrix matrix_mult_v2(const matrix *A, const matrix *B)
-{
-    const int rowsA = A->rows;
-    const int colsA = A->cols;
-    const int rowsB = B->rows;
-    const int colsB = B->cols;
-    assert(colsA == rowsB);
-    matrix C = new_matrix(rowsA, colsB);
-    matrix Btranspose = new_matrix(rowsB, colsB);
-    for (int i = 1; i <= rowsA; i++)
-        for (int j = 1; j <= colsB; j++)
-        {
-            mget(Btranspose, i, j) = mgetp(B, j, i);
-        }
-    for (int i = 1; i <= rowsA; i++)
-        for (int j = 1; j <= colsB; j++)
-            for (int k = 1; k <= colsA; k++)
-            {
-                mget(C, i, j) += mgetp(A, i, k) * mget(Btranspose, j, k);
-            }
-    return C;
-}
-
-matrix matrix_dot_mult(const matrix *A, const matrix *B)
-{
-    const int rows = A->rows;
-    const int cols = A->cols;
-    assert(rows == B->rows);
-    assert(cols == B->cols);
-    matrix C = new_matrix(rows, cols);
-    for (int i = 1; i <= rows; i++)
-        for (int j = 1; j <= cols; j++)
-        {
-            mget(C, i, j) = mgetp(A, i, j) * mgetp(B, i, j);
-        }
-    return C;
-}
-
-vector new_vector(const int size)
-{
-    vector vec;
-    vec.size = size;
-    assert(size > 0);
-    vec.val = (double *)malloc(sizeof(double) * size);
-    for (int i = 0; i < (size); i++)
-    {
-        vec.val[i] = 0.0;
-    }
-    return vec;
-}
-
-void print_vector_full(const vector *vec, char *varname)
-{
-    assert(vec->size > 0);
-    printf("\n");
-    printf(" %.100s =\n", &varname[1]);
-    printf(" | ");
-    for (int i = 1; i <= vec->size; i++)
-    {
-        printf("%10.3e", vgetp(vec, i));
-        if (i < vec->size)
-        {
-            printf(", ");
-        }
-    }
-    printf(" |^T\n\n");
-}
-
-vector vector_add(const vector *x, const vector *y)
-{
-    const int size = x->size;
-    assert(size == y->size);
-    vector z = new_vector(size);
-    for (int i = 1; i <= size; i++)
-    {
-        vget(z, i) = vgetp(x, i) + vgetp(y, i);
-    }
-    return z;
-}
-
-vector vector_sub(const vector *x, const vector *y)
-{
-    const int size = x->size;
-    assert(size == y->size);
-    vector z = new_vector(size);
-    for (int i = 1; i <= size; i++)
-    {
-        vget(z, i) = vgetp(x, i) - vgetp(y, i);
-    }
-    return z;
-}
-
-double vector_dot_mult(const vector *x, const vector *y)
-{
-    const int size = x->size;
-    assert(size == y->size);
-    double z = 0.0;
-    for (int i = 1; i <= size; i++)
-    {
-        z += vgetp(x, i) * vgetp(y, i);
-    }
-    return z;
-}
-
-void print_scalar_full(const double *z, char *varname)
-{
-    printf("\n %.100s =\n", &varname[1]);
-    printf(" %10.3e \n\n", *z);
-}
-
-vector matrix_vector_mult(const matrix *A, const vector *x)
-{
-    const int rows = A->rows;
-    const int cols = A->cols;
-    const int size = x->size;
-    assert(cols == size);
-    vector Ax = new_vector(rows);
-    for (int i = 1; i <= rows; i++)
-    {
-        double tmp = 0.0;
-        for (int j = 1; j <= size; j++)
-        {
-            tmp += mgetp(A, i, j) * vgetp(x, j);
-        }
-        vget(Ax, i) = tmp;
-    }
-    return Ax;
 }
 
 matrix matrix_transpose(const matrix *A)
@@ -235,72 +123,6 @@ matrix matrix_transpose(const matrix *A)
     return At;
 }
 
-vector solve(const matrix *A, const vector *b)
-{
-    const int rows = A->rows;
-    const int cols = A->cols;
-    const int size = b->size;
-    assert(rows == cols);
-    assert(rows == size);
-    vector x = new_vector(rows);
-    for (int i = 1; i <= (size - 1); i++) // LOOP OVER EACH COLUMN
-    {
-        // Select largest pivot in current column
-        int p = i;
-        double maxA = -100.0e0;
-        for (int j = i; j <= size; j++)
-        {
-            double tmp = fabs(mgetp(A, j, i));
-            if (tmp > maxA)
-            {
-                p = j;
-                maxA = tmp;
-            }
-        }
-        // See if matrix is singular
-        if (maxA <= 1.0e-14)
-        {
-            printf(" Cannot invert system\n");
-            exit(1);
-        }
-        // Pivot (aka interchange rows)
-        if (p != i)
-        {
-            for (int j = 1; j <= size; j++)
-            {
-                double tmp1 = mgetp(A, i, j);
-                mgetp(A, i, j) = mgetp(A, p, j);
-                mgetp(A, p, j) = tmp1;
-            }
-            double tmp2 = vgetp(b, i);
-            vgetp(b, i) = vgetp(b, p);
-            vgetp(b, p) = tmp2;
-        }
-        // Eliminate below diagonal
-        for (int j = (i + 1); j <= size; j++)
-        {
-            double dm = mgetp(A, j, i) / mgetp(A, i, i);
-            for (int k = 1; k <= size; k++)
-            {
-                mgetp(A, j, k) = mgetp(A, j, k) - dm * mgetp(A, i, k);
-            }
-            vgetp(b, j) = vgetp(b, j) - dm * vgetp(b, i);
-        }
-    }
-    // Backward substitution
-    vget(x, size) = vgetp(b, size) / mgetp(A, size, size);
-    for (int j = 1; j <= (size - 1); j++)
-    {
-        double sum = 0.0e0;
-        for (int k = (size - j + 1); k <= size; k++)
-        {
-            sum = sum + mgetp(A, size - j, k) * vget(x, k);
-        }
-        vget(x, size - j) = (vgetp(b, size - j) - sum) / mgetp(A, size - j, size - j);
-    }
-    return x;
-}
-
 void delete_matrix(matrix *A)
 {
     if (A->val == NULL)
@@ -309,15 +131,6 @@ void delete_matrix(matrix *A)
     A->val = NULL;
     A->rows = 0;
     A->cols = 0;
-}
-
-void delete_vector(vector *v)
-{
-    if (v->val == NULL)
-        return;
-    free(v->val);
-    v->val = NULL;
-    v->size = 0;
 }
 
 matrix matrix_add_col_vector(const matrix *A, const matrix *v)
@@ -355,4 +168,43 @@ matrix matrix_scalar_mult(const matrix *A, double scalar)
             mget(C, i, j) = mgetp(A, i, j) * scalar;
         }
     return C;
+}
+
+matrix matrix_mult_add_col(const matrix *W, const matrix *A, const matrix *b)
+{
+    const int rowsW = W->rows;
+    const int colsW = W->cols;
+    const int rowsA = A->rows;
+    const int colsA = A->cols;
+    assert(colsW == rowsA);
+    assert(rowsW == b->rows);
+    assert(b->cols == 1);
+    
+    matrix Z = new_matrix(rowsW, colsA);
+    matrix Atranspose = new_matrix(colsA, rowsA);
+    
+    // Transpose A for cache-friendly access
+    for (int i = 1; i <= rowsA; i++)
+        for (int j = 1; j <= colsA; j++)
+        {
+            mget(Atranspose, j, i) = mgetp(A, i, j);
+        }
+    
+    // Compute W*A + b in one pass
+    for (int i = 1; i <= rowsW; i++)
+    {
+        double bias = mgetp(b, i, 1);
+        for (int j = 1; j <= colsA; j++)
+        {
+            double sum = bias;  // Add bias directly
+            for (int k = 1; k <= colsW; k++)
+            {
+                sum += mgetp(W, i, k) * mget(Atranspose, j, k);
+            }
+            mget(Z, i, j) = sum;
+        }
+    }
+    
+    delete_matrix(&Atranspose);
+    return Z;
 }

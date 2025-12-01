@@ -74,7 +74,6 @@ nn_params train_model(const matrix *X_train, const matrix *Y_train,
     // Training loop
     for (int iter = 0; iter < num_iterations; iter++)
     {
-        printf("Iteration %d/%d\n", iter + 1, num_iterations);
         // Forward propagation
         forward_pass fwd = L_model_forward(X_train, &params);
 

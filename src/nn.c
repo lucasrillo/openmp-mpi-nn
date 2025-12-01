@@ -51,9 +51,7 @@ linear_cache linear_forward(const matrix *A, const matrix *W, const matrix *b)
     cache.W = *W;
     cache.b = *b;
 
-    matrix WA = matrix_mult(W, A);
-    cache.Z = matrix_add_col_vector(&WA, b);
-    delete_matrix(&WA);
+    cache.Z = matrix_mult_add_col(W, A, b);
 
     return cache;
 }
