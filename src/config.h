@@ -12,4 +12,7 @@
 // Default dataset size
 #define DEFAULT_NUM_SAMPLES MAX_NUM_SAMPLES
 
+// Random seed for reproducibility
+#define RANDOM_SEED 42
+
 #endif // CONFIG_H

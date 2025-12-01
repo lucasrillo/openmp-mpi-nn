@@ -26,6 +26,9 @@ void print_usage(const char *prog_name)
 
 int main(int argc, char *argv[])
 {
+    // ========== START TOTAL PROGRAM TIMER ==========
+    TIMER_START(g_total_program_time);
+    
     // Default values
     int num_samples = DEFAULT_NUM_SAMPLES;
     int num_iterations = DEFAULT_NUM_ITERATIONS;
@@ -137,14 +140,22 @@ int main(int argc, char *argv[])
     int L = 3; // number of layers (excluding input)
 
     // ========== TRAIN MODEL ==========
-    nn_params params = train_model(&data->X_train, &data->Y_train, &data->X_test, &data->Y_test, layer_dims, L, DEFAULT_LEARNING_RATE, num_iterations, print_every);
+    nn_params params = train_model(&data->X_train, &data->Y_train, &data->X_test, &data->Y_test, 
+                                    layer_dims, L, DEFAULT_LEARNING_RATE, num_iterations, 
+                                    print_every, num_samples);
 
     // ========== CLEANUP ==========
     printf("\nCleaning up...\n");
     delete_nn_params(&params);
     cleanup_transformed_data();
     cleanup_cifar10_data();
-    printf("Done!\n");
+    
+    // ========== STOP TOTAL PROGRAM TIMER ==========
+    TIMER_STOP(g_total_program_time);
+    printf("Done!\n\n");
+    printf("========================================\n");
+    printf("[TIMER] TOTAL PROGRAM TIME: %.3f seconds\n", g_total_program_time.elapsed_ms / 1000.0);
+    printf("========================================\n");
 
     return 0;
 }

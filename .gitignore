@@ -7,6 +7,7 @@ build/
 cifar-10-batches-bin/
 cifar-10-binary.tar.gz
 *.ppm
+*.csv
 
 # Mac files
 .DS_Store

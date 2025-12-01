@@ -1,10 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
+
 #include "nn_train.h"
 #include "config.h"
-
-// Define timing globals
-#define TIMING_IMPL
 #include "timing.h"
 
 double compute_accuracy(const matrix *X, const matrix *Y, const nn_params *params)
@@ -54,7 +52,7 @@ nn_params train_model(const matrix *X_train, const matrix *Y_train,
                       const matrix *X_test, const matrix *Y_test,
                       int *layer_dims, int L,
                       double learning_rate, int num_iterations,
-                      int print_every)
+                      int print_every, int num_samples)
 {
     // Initialize timing accumulators
     init_timing_accumulators();
@@ -64,7 +62,7 @@ nn_params train_model(const matrix *X_train, const matrix *Y_train,
 
     // Initialize parameters
     nn_params params = initialize_parameters_he(layer_dims, L);
-    
+
     printf("\n========== TRAINING CONFIGURATION ==========\n");
     printf("Architecture: ");
     for (int l = 0; l <= L; l++)
@@ -81,6 +79,7 @@ nn_params train_model(const matrix *X_train, const matrix *Y_train,
     printf("=============================================\n\n\n");
 
     // Training loop
+    printf("========== TRAINING LOOP ==========\n");
     for (int iter = 0; iter < num_iterations; iter++)
     {
         // ========== FORWARD PROPAGATION ==========
@@ -115,7 +114,7 @@ nn_params train_model(const matrix *X_train, const matrix *Y_train,
             double test_acc = compute_accuracy(X_test, Y_test, &params);
             TIMER_STOP(timer);
             ACCUM_ADD(g_accuracy_time, timer);
-            
+
             printf("Iter %5d: Cost = %.6f | Train Acc = %6.2f%% | Test Acc = %6.2f%%\n",
                    iter, cost, train_acc, test_acc);
         }
@@ -125,18 +124,26 @@ nn_params train_model(const matrix *X_train, const matrix *Y_train,
         delete_nn_grads(&grads, params.L);
     }
 
-    // ========== FINAL EVALUATION ==========
-    printf("\n========== TRAINING COMPLETE ==========\n");
-    
     TIMER_STOP(total_timer);
-    printf("Total training time: %.2f seconds\n", total_timer.elapsed_ms / 1000.0);
+    printf("------------------------------------------------------------\n");
+    printf("[TIMER] Total training time: %.2f seconds\n", total_timer.elapsed_ms / 1000.0);
 
     double final_train_acc = compute_accuracy(X_train, Y_train, &params);
     double final_test_acc = compute_accuracy(X_test, Y_test, &params);
     printf("Final Train Accuracy: %.2f%%\n", final_train_acc);
     printf("Final Test Accuracy:  %.2f%%\n", final_test_acc);
+    printf("=======================================\n\n");
 
     print_timing_summary();
+
+    // Log results to CSV
+    log_results_to_csv("training_results.csv",
+                       num_samples,
+                       num_iterations,
+                       learning_rate,
+                       final_train_acc,
+                       final_test_acc,
+                       total_timer.elapsed_ms / 1000.0);
 
     return params;
 }
