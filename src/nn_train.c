@@ -1,6 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "nn_train.h"
+#include "config.h"
+
+// Define timing globals
+#define TIMING_IMPL
+#include "timing.h"
 
 double compute_accuracy(const matrix *X, const matrix *Y, const nn_params *params)
 {
@@ -40,12 +45,7 @@ double compute_accuracy(const matrix *X, const matrix *Y, const nn_params *param
     }
 
     // Cleanup
-    for (int l = 0; l < params->L; l++)
-    {
-        delete_matrix(&fwd.caches[l].linear.Z);
-        delete_matrix(&fwd.caches[l].A);
-    }
-    free(fwd.caches);
+    cleanup_forward_pass(&fwd, params->L);
 
     return (double)correct / m * 100.0;
 }
@@ -56,10 +56,18 @@ nn_params train_model(const matrix *X_train, const matrix *Y_train,
                       double learning_rate, int num_iterations,
                       int print_every)
 {
+    // Initialize timing accumulators
+#if ENABLE_TIMING
+    init_timing_accumulators();
+    timer_t_custom timer;
+    timer_t_custom total_timer;
+    TIMER_START(total_timer);
+#endif
+
     // Initialize parameters
     nn_params params = initialize_parameters_he(layer_dims, L);
     
-    printf("\nStarting training...\n");
+    printf("\n========== TRAINING CONFIGURATION ==========\n");
     printf("Architecture: ");
     for (int l = 0; l <= L; l++)
     {
@@ -69,49 +77,112 @@ nn_params train_model(const matrix *X_train, const matrix *Y_train,
     }
     printf("\n");
     printf("Learning rate: %.4f\n", learning_rate);
-    printf("Iterations: %d\n\n", num_iterations);
+    printf("Iterations: %d\n", num_iterations);
+    printf("Training samples: %d\n", X_train->cols);
+    printf("Test samples: %d\n", X_test->cols);
+#if USE_DEBUG_SUBSET
+    printf("Mode: DEBUG SUBSET\n");
+#else
+    printf("Mode: FULL DATASET\n");
+#endif
+    printf("=============================================\n\n");
 
     // Training loop
     for (int iter = 0; iter < num_iterations; iter++)
     {
-        // Forward propagation
+        // ========== FORWARD PROPAGATION ==========
+#if ENABLE_TIMING
+        TIMER_START(timer);
+#endif
         forward_pass fwd = L_model_forward(X_train, &params);
+#if ENABLE_TIMING
+        TIMER_STOP(timer);
+        ACCUM_ADD(g_forward_time, timer);
+#if VERBOSE_TIMING
+        if (iter % print_every == 0)
+            TIMER_PRINT(timer, "Forward");
+#endif
+#endif
 
-        // Compute cost
+        // ========== COMPUTE COST ==========
+#if ENABLE_TIMING
+        TIMER_START(timer);
+#endif
         double cost = compute_cost(&fwd.AL, Y_train);
+#if ENABLE_TIMING
+        TIMER_STOP(timer);
+        ACCUM_ADD(g_cost_time, timer);
+#endif
 
-        // Backward propagation
+        // ========== BACKWARD PROPAGATION ==========
+#if ENABLE_TIMING
+        TIMER_START(timer);
+#endif
         nn_grads grads = L_model_backward(&fwd.AL, Y_train, &fwd, params.L);
+#if ENABLE_TIMING
+        TIMER_STOP(timer);
+        ACCUM_ADD(g_backward_time, timer);
+#if VERBOSE_TIMING
+        if (iter % print_every == 0)
+            TIMER_PRINT(timer, "Backward");
+#endif
+#endif
 
-        // Update parameters
+        // ========== UPDATE PARAMETERS ==========
+#if ENABLE_TIMING
+        TIMER_START(timer);
+#endif
         update_parameters(&params, &grads, learning_rate);
+#if ENABLE_TIMING
+        TIMER_STOP(timer);
+        ACCUM_ADD(g_update_time, timer);
+#endif
 
-        // Print progress
+        // ========== PRINT PROGRESS ==========
         if (print_every > 0 && iter % print_every == 0)
         {
+#if ENABLE_TIMING
+            TIMER_START(timer);
+#endif
             double train_acc = compute_accuracy(X_train, Y_train, &params);
             double test_acc = compute_accuracy(X_test, Y_test, &params);
+#if ENABLE_TIMING
+            TIMER_STOP(timer);
+            ACCUM_ADD(g_accuracy_time, timer);
+#endif
             
-            printf("Iteration %5d: Cost = %.6f | Train Acc = %.2f%% | Test Acc = %.2f%%\n",
+            printf("Iter %5d: Cost = %.6f | Train Acc = %6.2f%% | Test Acc = %6.2f%%",
                    iter, cost, train_acc, test_acc);
+            
+#if ENABLE_TIMING && VERBOSE_TIMING
+            printf(" | Fwd: %.1fms | Bwd: %.1fms",
+                   g_forward_time.total_ms / (iter + 1),
+                   g_backward_time.total_ms / (iter + 1));
+#endif
+            printf("\n");
         }
 
-        // Cleanup iteration
-        for (int l = 0; l < params.L; l++)
-        {
-            delete_matrix(&fwd.caches[l].linear.Z);
-            delete_matrix(&fwd.caches[l].A);
-        }
-        free(fwd.caches);
-        delete_nn_grads(&grads);
+        // ========== CLEANUP ITERATION ==========
+        cleanup_forward_pass(&fwd, params.L);
+        delete_nn_grads(&grads, params.L);
     }
 
-    // Final evaluation
-    printf("\nTraining complete!\n");
+    // ========== FINAL EVALUATION ==========
+    printf("\n========== TRAINING COMPLETE ==========\n");
+    
+#if ENABLE_TIMING
+    TIMER_STOP(total_timer);
+    printf("Total training time: %.2f seconds\n", total_timer.elapsed_ms / 1000.0);
+#endif
+
     double final_train_acc = compute_accuracy(X_train, Y_train, &params);
     double final_test_acc = compute_accuracy(X_test, Y_test, &params);
     printf("Final Train Accuracy: %.2f%%\n", final_train_acc);
-    printf("Final Test Accuracy: %.2f%%\n", final_test_acc);
+    printf("Final Test Accuracy:  %.2f%%\n", final_test_acc);
+
+#if ENABLE_TIMING
+    print_timing_summary();
+#endif
 
     return params;
 }

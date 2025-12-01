@@ -1,5 +1,5 @@
-#ifndef DATA_H
-#define DATA_H
+#ifndef LOAD_H
+#define LOAD_H
 
 #include <stdint.h>
 
@@ -28,4 +28,4 @@ extern const char *class_names[NUM_CLASSES];
 int init_cifar10_data(void);
 void cleanup_cifar10_data(void);
 
-#endif // DATA_H
+#endif // LOAD_H

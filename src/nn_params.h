@@ -12,6 +12,6 @@ void update_parameters(nn_params *params, const nn_grads *grads, double learning
 
 // Cleanup functions
 void delete_nn_params(nn_params *params);
-void delete_nn_grads(nn_grads *grads);
+void delete_nn_grads(nn_grads *grads, int L);
 
 #endif // NN_PARAMS_H

@@ -3,9 +3,20 @@
 
 #include <stdint.h>
 #include "load.h"
+#include "config.h"
 
-#define TRAIN_SIZE 45000
-#define TEST_SIZE 5000
+// Full dataset sizes
+#define FULL_TRAIN_SIZE 45000
+#define FULL_TEST_SIZE 5000
+
+// Use debug subset or full dataset based on config
+#if USE_DEBUG_SUBSET
+    #define TRAIN_SIZE DEBUG_TRAIN_SIZE
+    #define TEST_SIZE  DEBUG_TEST_SIZE
+#else
+    #define TRAIN_SIZE FULL_TRAIN_SIZE
+    #define TEST_SIZE  FULL_TEST_SIZE
+#endif
 
 // Transformed data structure
 typedef struct {

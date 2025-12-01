@@ -27,13 +27,14 @@ nn_params initialize_parameters_he(int *layer_dims, int L)
                 // Box-Muller transform for normal distribution
                 double u1 = ((double)rand() / RAND_MAX);
                 double u2 = ((double)rand() / RAND_MAX);
+                // Avoid log(0)
+                if (u1 < 1e-10) u1 = 1e-10;
                 double z = sqrt(-2.0 * log(u1)) * cos(2.0 * M_PI * u2);
                 mget(params.W[l], i, j) = z * std;
             }
 
         // Initialize biases to zero
         params.b[l] = new_matrix(rows, 1);
-        // Already initialized to 0 by new_matrix
     }
 
     return params;
@@ -46,15 +47,11 @@ void update_parameters(nn_params *params, const nn_grads *grads, double learning
         // W = W - learning_rate * dW
         for (int i = 1; i <= params->W[l].rows; i++)
             for (int j = 1; j <= params->W[l].cols; j++)
-            {
                 mget(params->W[l], i, j) -= learning_rate * mget(grads->dW[l], i, j);
-            }
 
         // b = b - learning_rate * db
         for (int i = 1; i <= params->b[l].rows; i++)
-        {
             mget(params->b[l], i, 1) -= learning_rate * mget(grads->db[l], i, 1);
-        }
     }
 }
 
@@ -76,15 +73,10 @@ void delete_nn_params(nn_params *params)
     params->L = 0;
 }
 
-void delete_nn_grads(nn_grads *grads)
+void delete_nn_grads(nn_grads *grads, int L)
 {
     if (!grads || !grads->dW)
         return;
-    
-    // Count layers by checking first non-NULL entry
-    int L = 0;
-    while (grads->dW[L].val != NULL)
-        L++;
     
     for (int l = 0; l < L; l++)
     {
