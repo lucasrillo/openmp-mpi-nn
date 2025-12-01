@@ -4,33 +4,23 @@
 #include <stdint.h>
 #include "load.h"
 #include "config.h"
+#include "matrix.h"
 
-// Full dataset sizes
-#define FULL_TRAIN_SIZE 45000
-#define FULL_TEST_SIZE 5000
-
-// Use debug subset or full dataset based on config
-#if USE_DEBUG_SUBSET
-    #define TRAIN_SIZE DEBUG_TRAIN_SIZE
-    #define TEST_SIZE  DEBUG_TEST_SIZE
-#else
-    #define TRAIN_SIZE FULL_TRAIN_SIZE
-    #define TEST_SIZE  FULL_TEST_SIZE
-#endif
-
-// Transformed data structure
+// Transformed data structure with matrices
 typedef struct {
-    double *x_train;  // Training images (PIXELS_PER_IMAGE × TRAIN_SIZE)
-    uint8_t *y_train; // Training labels (TRAIN_SIZE)
-    double *x_test;   // Testing images (PIXELS_PER_IMAGE × TEST_SIZE)
-    uint8_t *y_test;  // Testing labels (TEST_SIZE)
+    matrix X_train;   // Training images (PIXELS_PER_IMAGE × train_size)
+    matrix Y_train;   // Training labels one-hot (NUM_CLASSES × train_size)
+    matrix X_test;    // Testing images (PIXELS_PER_IMAGE × test_size)
+    matrix Y_test;    // Testing labels one-hot (NUM_CLASSES × test_size)
+    int train_size;   // Actual training size
+    int test_size;    // Actual test size
 } CIFAR10Data;
 
 // Global transformed data (dynamically allocated)
 extern CIFAR10Data *data;
 
 // Functions
-int prepare_cifar10_data(void);
+int prepare_cifar10_data(int num_samples);
 void cleanup_transformed_data(void);
 
 #endif // TRANSFORM_H
