@@ -63,6 +63,6 @@ extern timer_t_custom g_total_program_time;
 // Function declarations
 void init_timing_accumulators(void);
 void print_timing_summary(void);
-void log_results_to_csv(const char *filename, int num_samples, int num_iterations, double learning_rate, double final_train_acc, double final_test_acc, double total_time_sec);
+void log_results_to_csv(const char *filename, int num_samples, int num_iterations, double learning_rate, double final_train_acc, double final_test_acc, double training_time_sec, int num_threads);
 
 #endif // TIMING_H

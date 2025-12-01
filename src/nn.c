@@ -1,12 +1,16 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
+#include <omp.h>
+
 #include "matrix.h"
 #include "nn.h"
 
 matrix relu(const matrix *Z)
 {
     matrix A = new_matrix(Z->rows, Z->cols);
+
+#pragma omp parallel for collapse(2)
     for (int i = 1; i <= Z->rows; i++)
         for (int j = 1; j <= Z->cols; j++)
             mget(A, i, j) = fmax(0.0, mgetp(Z, i, j));
@@ -17,7 +21,8 @@ matrix softmax(const matrix *Z)
 {
     matrix A = new_matrix(Z->rows, Z->cols);
 
-    // Process column by column (each column is a sample)
+// Process column by column (each column is a sample)
+#pragma omp parallel for
     for (int j = 1; j <= Z->cols; j++)
     {
         // Find max for numerical stability
@@ -32,7 +37,7 @@ matrix softmax(const matrix *Z)
             mget(A, i, j) = exp(mgetp(Z, i, j) - max_val);
             sum += mget(A, i, j);
         }
-        
+
         // Normalize
         double inv_sum = 1.0 / sum;
         for (int i = 1; i <= Z->rows; i++)
@@ -44,6 +49,8 @@ matrix softmax(const matrix *Z)
 matrix relu_backward(const matrix *dA, const matrix *Z_cache)
 {
     matrix dZ = new_matrix(dA->rows, dA->cols);
+
+#pragma omp parallel for collapse(2)
     for (int i = 1; i <= dA->rows; i++)
         for (int j = 1; j <= dA->cols; j++)
             mget(dZ, i, j) = mgetp(Z_cache, i, j) > 0 ? mgetp(dA, i, j) : 0.0;
@@ -69,12 +76,12 @@ layer_cache linear_activation_forward(const matrix *A_prev, const matrix *W, con
 
     switch (activation)
     {
-        case ACTIVATION_RELU:
-            cache.A = relu(&cache.linear.Z);
-            break;
-        case ACTIVATION_SOFTMAX:
-            cache.A = softmax(&cache.linear.Z);
-            break;
+    case ACTIVATION_RELU:
+        cache.A = relu(&cache.linear.Z);
+        break;
+    case ACTIVATION_SOFTMAX:
+        cache.A = softmax(&cache.linear.Z);
+        break;
     }
 
     return cache;
@@ -102,7 +109,8 @@ double compute_cost(const matrix *AL, const matrix *Y)
     const int m = Y->cols;
     double cost = 0.0;
 
-    // Cross-entropy loss
+// Cross-entropy loss
+#pragma omp parallel for reduction(+ : cost) collapse(2)
     for (int j = 1; j <= m; j++)
         for (int i = 1; i <= Y->rows; i++)
             if (mgetp(Y, i, j) > 0)
@@ -135,18 +143,18 @@ linear_grads linear_activation_backward(const matrix *dA, const layer_cache *cac
 {
     matrix dZ;
     int owns_dZ = 0;
-    
+
     switch (activation)
     {
-        case ACTIVATION_RELU:
-            dZ = relu_backward(dA, &cache->linear.Z);
-            owns_dZ = 1;
-            break;
-        case ACTIVATION_SOFTMAX:
-            // For softmax with cross-entropy, dZ = AL - Y (passed directly as dA)
-            dZ = *dA;
-            owns_dZ = 0;
-            break;
+    case ACTIVATION_RELU:
+        dZ = relu_backward(dA, &cache->linear.Z);
+        owns_dZ = 1;
+        break;
+    case ACTIVATION_SOFTMAX:
+        // For softmax with cross-entropy, dZ = AL - Y (passed directly as dA)
+        dZ = *dA;
+        owns_dZ = 0;
+        break;
     }
 
     linear_grads grads = linear_backward(&dZ, &cache->linear);
@@ -195,7 +203,7 @@ void cleanup_forward_pass(forward_pass *fwd, int L)
 {
     if (!fwd || !fwd->caches)
         return;
-    
+
     for (int l = 0; l < L; l++)
     {
         delete_matrix(&fwd->caches[l].linear.Z);

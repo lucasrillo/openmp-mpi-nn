@@ -1,12 +1,21 @@
-CC = gcc
-FLAGS = -Wall -Werror #-fopenmp
+# Detect OS
+UNAME_S := $(shell uname -s)
+
+ifeq ($(UNAME_S),Darwin)
+    # macOS
+    LLVM = /opt/homebrew/opt/llvm
+    CC = $(LLVM)/bin/clang
+    FLAGS = -Wall -Werror -fopenmp -I$(LLVM)/include
+else
+    # Linux (and other Unix-like systems)
+    CC = gcc
+    FLAGS = -Wall -Werror -fopenmp
+endif
 
 SRC_DIR = src
 BUILD_DIR = build
-
 SRC = $(wildcard $(SRC_DIR)/*.c) \
       $(wildcard $(SRC_DIR)/*/*.c)
-
 OBJ = $(SRC:$(SRC_DIR)/%.c=$(BUILD_DIR)/%.o)
 
 all: main.exe

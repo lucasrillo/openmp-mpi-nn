@@ -15,4 +15,7 @@
 // Random seed for reproducibility
 #define RANDOM_SEED 42
 
+// Default number of OpenMP threads
+#define DEFAULT_NUM_THREADS 1
+
 #endif // CONFIG_H

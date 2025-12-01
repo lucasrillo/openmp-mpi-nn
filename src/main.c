@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <omp.h>
 
 #include "config.h"
 #include "load.h"
@@ -19,20 +20,22 @@ void print_usage(const char *prog_name)
            MAX_NUM_SAMPLES, DEFAULT_NUM_SAMPLES);
     printf("  -i, --iterations <num>   Number of training iterations (default %d)\n", DEFAULT_NUM_ITERATIONS);
     printf("  -p, --print <num>        Print progress every N iterations (default %d)\n", DEFAULT_PRINT_EVERY);
+    printf("  -t, --threads <num>      Number of OpenMP threads (default %d)\n", DEFAULT_NUM_THREADS);
     printf("  -h, --help               Show this help message\n");
     printf("\nExample:\n");
-    printf("  %s -n 10000 -i 500 -p 50\n", prog_name);
+    printf("  %s -n 10000 -i 500 -p 50 -t 4\n", prog_name);
 }
 
 int main(int argc, char *argv[])
 {
     // ========== START TOTAL PROGRAM TIMER ==========
     TIMER_START(g_total_program_time);
-    
+
     // Default values
     int num_samples = DEFAULT_NUM_SAMPLES;
     int num_iterations = DEFAULT_NUM_ITERATIONS;
     int print_every = DEFAULT_PRINT_EVERY;
+    int num_threads = DEFAULT_NUM_THREADS;
 
     // Parse command-line arguments
     for (int i = 1; i < argc; i++)
@@ -74,6 +77,15 @@ int main(int argc, char *argv[])
                 return 1;
             }
         }
+        else if ((strcmp(argv[i], "-t") == 0 || strcmp(argv[i], "--threads") == 0) && i + 1 < argc)
+        {
+            num_threads = atoi(argv[++i]);
+            if (num_threads <= 0)
+            {
+                fprintf(stderr, "Error: Number of threads must be positive\n");
+                return 1;
+            }
+        }
         else
         {
             fprintf(stderr, "Error: Unknown argument '%s'\n", argv[i]);
@@ -81,6 +93,9 @@ int main(int argc, char *argv[])
             return 1;
         }
     }
+
+    // Set number of OpenMP threads
+    omp_set_num_threads(num_threads);
 
     timer_t_custom startup_timer;
     TIMER_START(startup_timer);
@@ -92,6 +107,7 @@ int main(int argc, char *argv[])
     printf("Samples per class: %d (train: %d, test: %d)\n", num_samples / NUM_CLASSES, (train_size / NUM_CLASSES), (test_size / NUM_CLASSES));
     printf("Iterations: %d\n", num_iterations);
     printf("Print every: %d iterations\n", print_every);
+    printf("OpenMP threads: %d\n", num_threads);
     printf("==============================================\n\n");
 
     // ========== LOAD DATA ==========
@@ -140,16 +156,16 @@ int main(int argc, char *argv[])
     int L = 3; // number of layers (excluding input)
 
     // ========== TRAIN MODEL ==========
-    nn_params params = train_model(&data->X_train, &data->Y_train, &data->X_test, &data->Y_test, 
-                                    layer_dims, L, DEFAULT_LEARNING_RATE, num_iterations, 
-                                    print_every, num_samples);
+    nn_params params = train_model(&data->X_train, &data->Y_train, &data->X_test, &data->Y_test,
+                                   layer_dims, L, DEFAULT_LEARNING_RATE, num_iterations,
+                                   print_every, num_samples, num_threads);
 
     // ========== CLEANUP ==========
     printf("\nCleaning up...\n");
     delete_nn_params(&params);
     cleanup_transformed_data();
     cleanup_cifar10_data();
-    
+
     // ========== STOP TOTAL PROGRAM TIMER ==========
     TIMER_STOP(g_total_program_time);
     printf("Done!\n\n");

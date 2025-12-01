@@ -8,7 +8,7 @@
 double compute_accuracy(const matrix *X, const matrix *Y, const nn_params *params)
 {
     forward_pass fwd = L_model_forward(X, params);
-    
+
     int m = X->cols;
     int correct = 0;
 
@@ -52,13 +52,13 @@ nn_params train_model(const matrix *X_train, const matrix *Y_train,
                       const matrix *X_test, const matrix *Y_test,
                       int *layer_dims, int L,
                       double learning_rate, int num_iterations,
-                      int print_every, int num_samples)
+                      int print_every, int num_samples, int num_threads)
 {
     // Initialize timing accumulators
     init_timing_accumulators();
     timer_t_custom timer;
-    timer_t_custom total_timer;
-    TIMER_START(total_timer);
+    timer_t_custom training_timer;
+    TIMER_START(training_timer);
 
     // Initialize parameters
     nn_params params = initialize_parameters_he(layer_dims, L);
@@ -124,9 +124,9 @@ nn_params train_model(const matrix *X_train, const matrix *Y_train,
         delete_nn_grads(&grads, params.L);
     }
 
-    TIMER_STOP(total_timer);
+    TIMER_STOP(training_timer);
     printf("------------------------------------------------------------\n");
-    printf("[TIMER] Total training time: %.2f seconds\n", total_timer.elapsed_ms / 1000.0);
+    printf("[TIMER] Total training time: %.2f seconds\n", training_timer.elapsed_ms / 1000.0);
 
     double final_train_acc = compute_accuracy(X_train, Y_train, &params);
     double final_test_acc = compute_accuracy(X_test, Y_test, &params);
@@ -136,14 +136,15 @@ nn_params train_model(const matrix *X_train, const matrix *Y_train,
 
     print_timing_summary();
 
-    // Log results to CSV
+    // Log results to CSV (training_time_sec is just the training loop, not entire program)
     log_results_to_csv("training_results.csv",
                        num_samples,
                        num_iterations,
                        learning_rate,
                        final_train_acc,
                        final_test_acc,
-                       total_timer.elapsed_ms / 1000.0);
+                       training_timer.elapsed_ms / 1000.0,
+                       num_threads);
 
     return params;
 }

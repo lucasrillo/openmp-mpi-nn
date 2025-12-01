@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <assert.h>
 #include <math.h>
+#include <omp.h>
 #include "matrix.h"
 
 matrix new_matrix(const int rows, const int cols)
@@ -24,6 +25,8 @@ matrix matrix_add(const matrix *A, const matrix *B)
     assert(rows == B->rows);
     assert(cols == B->cols);
     matrix C = new_matrix(rows, cols);
+
+#pragma omp parallel for collapse(2)
     for (int i = 1; i <= rows; i++)
         for (int j = 1; j <= cols; j++)
         {
@@ -39,6 +42,8 @@ matrix matrix_sub(const matrix *A, const matrix *B)
     assert(rows == B->rows);
     assert(cols == B->cols);
     matrix C = new_matrix(rows, cols);
+
+#pragma omp parallel for collapse(2)
     for (int i = 1; i <= rows; i++)
         for (int j = 1; j <= cols; j++)
         {
@@ -54,16 +59,18 @@ matrix matrix_mult(const matrix *A, const matrix *B) // Matrix mult v2: cache op
     const int rowsB = B->rows;
     const int colsB = B->cols;
     assert(colsA == rowsB);
-    
+
     matrix C = new_matrix(rowsA, colsB);
     matrix Btranspose = new_matrix(colsB, rowsB);
-    
-    // Transpose B for cache-friendly access
+
+// Transpose B for cache-friendly access
+#pragma omp parallel for collapse(2)
     for (int i = 1; i <= rowsB; i++)
         for (int j = 1; j <= colsB; j++)
             mget(Btranspose, j, i) = mgetp(B, i, j);
-    
-    // Both accesses are row-wise (cache-friendly)
+
+// Both accesses are row-wise (cache-friendly)
+#pragma omp parallel for collapse(2)
     for (int i = 1; i <= rowsA; i++)
         for (int j = 1; j <= colsB; j++)
         {
@@ -72,7 +79,7 @@ matrix matrix_mult(const matrix *A, const matrix *B) // Matrix mult v2: cache op
                 sum += mgetp(A, i, k) * mget(Btranspose, j, k);
             mget(C, i, j) = sum;
         }
-    
+
     delete_matrix(&Btranspose);
     return C;
 }
@@ -83,6 +90,7 @@ matrix matrix_transpose(const matrix *A)
     const int cols = A->cols;
     matrix At = new_matrix(cols, rows);
 
+#pragma omp parallel for collapse(2)
     for (int i = 1; i <= rows; i++)
         for (int j = 1; j <= cols; j++)
             mget(At, j, i) = mgetp(A, i, j);
@@ -103,6 +111,8 @@ void delete_matrix(matrix *A)
 matrix matrix_sum_rows(const matrix *A)
 {
     matrix v = new_matrix(A->rows, 1);
+
+#pragma omp parallel for
     for (int i = 1; i <= A->rows; i++)
     {
         double sum = 0.0;
@@ -116,6 +126,8 @@ matrix matrix_sum_rows(const matrix *A)
 matrix matrix_scalar_mult(const matrix *A, double scalar)
 {
     matrix C = new_matrix(A->rows, A->cols);
+
+#pragma omp parallel for collapse(2)
     for (int i = 1; i <= A->rows; i++)
         for (int j = 1; j <= A->cols; j++)
             mget(C, i, j) = mgetp(A, i, j) * scalar;
@@ -131,28 +143,30 @@ matrix matrix_mult_add_col(const matrix *W, const matrix *A, const matrix *b)
     assert(colsW == rowsA);
     assert(rowsW == b->rows);
     assert(b->cols == 1);
-    
+
     matrix Z = new_matrix(rowsW, colsA);
     matrix Atranspose = new_matrix(colsA, rowsA);
-    
-    // Transpose A for cache-friendly access
+
+// Transpose A for cache-friendly access
+#pragma omp parallel for collapse(2)
     for (int i = 1; i <= rowsA; i++)
         for (int j = 1; j <= colsA; j++)
             mget(Atranspose, j, i) = mgetp(A, i, j);
-    
-    // Compute W*A + b in one pass
+
+// Compute W*A + b in one pass
+#pragma omp parallel for collapse(2)
     for (int i = 1; i <= rowsW; i++)
     {
-        double bias = mgetp(b, i, 1);
         for (int j = 1; j <= colsA; j++)
         {
+            double bias = mgetp(b, i, 1);
             double sum = bias;
             for (int k = 1; k <= colsW; k++)
                 sum += mgetp(W, i, k) * mget(Atranspose, j, k);
             mget(Z, i, j) = sum;
         }
     }
-    
+
     delete_matrix(&Atranspose);
     return Z;
 }
@@ -165,11 +179,12 @@ matrix matrix_mult_transB_scale(const matrix *A, const matrix *B, double scalar)
     const int colsA = A->cols;
     const int rowsB = B->rows;
     const int colsB = B->cols;
-    assert(colsA == colsB);  // A * B^T requires A.cols == B.cols
-    
+    assert(colsA == colsB); // A * B^T requires A.cols == B.cols
+
     matrix C = new_matrix(rowsA, rowsB);
-    
-    // Both A and B are accessed row-wise (cache-friendly)
+
+// Both A and B are accessed row-wise (cache-friendly)
+#pragma omp parallel for collapse(2)
     for (int i = 1; i <= rowsA; i++)
         for (int j = 1; j <= rowsB; j++)
         {
@@ -178,7 +193,7 @@ matrix matrix_mult_transB_scale(const matrix *A, const matrix *B, double scalar)
                 sum += mgetp(A, i, k) * mgetp(B, j, k);
             mget(C, i, j) = sum * scalar;
         }
-    
+
     return C;
 }
 
@@ -190,13 +205,14 @@ matrix matrix_multT_B(const matrix *A, const matrix *B)
     const int colsA = A->cols;
     const int rowsB = B->rows;
     const int colsB = B->cols;
-    assert(rowsA == rowsB);  // A^T * B requires A.rows == B.rows
-    
+    assert(rowsA == rowsB); // A^T * B requires A.rows == B.rows
+
     matrix C = new_matrix(colsA, colsB);
-    
-    // Reorganize for better cache access
-    // C[i,j] = sum_k A[k,i] * B[k,j]
-    // Process B column by column with A transposed access
+
+// Reorganize for better cache access
+// C[i,j] = sum_k A[k,i] * B[k,j]
+// Process B column by column with A transposed access
+#pragma omp parallel for collapse(2)
     for (int i = 1; i <= colsA; i++)
         for (int j = 1; j <= colsB; j++)
         {
@@ -205,6 +221,6 @@ matrix matrix_multT_B(const matrix *A, const matrix *B)
                 sum += mgetp(A, k, i) * mgetp(B, k, j);
             mget(C, i, j) = sum;
         }
-    
+
     return C;
 }

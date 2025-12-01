@@ -44,7 +44,8 @@ void log_results_to_csv(const char *filename,
                         double learning_rate,
                         double final_train_acc,
                         double final_test_acc,
-                        double total_time_sec)
+                        double training_time_sec,
+                        int num_threads)
 {
     FILE *file = fopen(filename, "r");
     int file_exists = (file != NULL);
@@ -62,19 +63,20 @@ void log_results_to_csv(const char *filename,
     if (!file_exists)
     {
         fprintf(file, "num_samples,num_iterations,learning_rate,train_accuracy,test_accuracy,"
-                      "total_time_sec,forward_time_ms,backward_time_ms,update_time_ms,"
+                      "training_time_sec,num_threads,forward_time_ms,backward_time_ms,update_time_ms,"
                       "cost_time_ms,accuracy_time_ms,avg_forward_ms,avg_backward_ms,"
                       "avg_update_ms\n");
     }
 
     // Write data row
-    fprintf(file, "%d,%d,%.6f,%.2f,%.2f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\n",
+    fprintf(file, "%d,%d,%.6f,%.2f,%.2f,%.3f,%d,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\n",
             num_samples,
             num_iterations,
             learning_rate,
             final_train_acc,
             final_test_acc,
-            total_time_sec,
+            training_time_sec,
+            num_threads,
             g_forward_time.total_ms,
             g_backward_time.total_ms,
             g_update_time.total_ms,
