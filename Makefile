@@ -4,12 +4,12 @@ UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
     # macOS with libomp
     CC = mpicc
-    CFLAGS = -Wall -Werror -Xpreprocessor -fopenmp -I/opt/homebrew/opt/libomp/include
+    CFLAGS = -O3 -Wall -Werror -Xpreprocessor -fopenmp -I/opt/homebrew/opt/libomp/include
     LDFLAGS = -L/opt/homebrew/opt/libomp/lib -lomp
 else
     # Linux (and other Unix-like systems)
     CC = mpicc
-    CFLAGS = -Wall -Werror -fopenmp
+    CFLAGS = -O3 -Wall -Werror -fopenmp
     LDFLAGS =
 endif
 
