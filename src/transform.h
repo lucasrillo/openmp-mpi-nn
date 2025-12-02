@@ -1,26 +1,32 @@
 #ifndef TRANSFORM_H
 #define TRANSFORM_H
 
-#include <stdint.h>
-#include "load.h"
-#include "config.h"
 #include "matrix.h"
+#include "load.h"
 
-// Transformed data structure with matrices
-typedef struct {
-    matrix X_train;   // Training images (PIXELS_PER_IMAGE × train_size)
-    matrix Y_train;   // Training labels one-hot (NUM_CLASSES × train_size)
-    matrix X_test;    // Testing images (PIXELS_PER_IMAGE × test_size)
-    matrix Y_test;    // Testing labels one-hot (NUM_CLASSES × test_size)
-    int train_size;   // Actual training size
-    int test_size;    // Actual test size
+// Transformed data structure
+typedef struct
+{
+    matrix X_train;
+    matrix Y_train;
+    matrix X_test;
+    matrix Y_test;
+    int train_size;
+    int test_size;
 } CIFAR10Data;
 
-// Global transformed data (dynamically allocated)
+// Global pointer to transformed data
 extern CIFAR10Data *data;
 
-// Functions
-int prepare_cifar10_data(int num_samples);
+/**
+ * Prepare CIFAR-10 data for a specific MPI rank
+ * Given num_processes P, rank r (0 to P-1), and total num_samples n,
+ * each rank gets a disjoint subset: rank r gets samples [r*n/P, (r+1)*n/P-1] from each class
+ * Returns 0 on success, 1 on error
+ */
+int prepare_cifar10_data(int num_samples, int rank, int num_processes);
+
+// Clean up transformed data
 void cleanup_transformed_data(void);
 
 #endif // TRANSFORM_H

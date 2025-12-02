@@ -4,7 +4,7 @@
 #include <time.h>
 #include <stdio.h>
 
-// High-resolution timer using clock_gettime
+// Timer using clock_gettime
 typedef struct
 {
     struct timespec start;
@@ -12,9 +12,8 @@ typedef struct
     double elapsed_ms;
 } timer_t_custom;
 
-// Timer macros for easy use
+// Macros to facilitate timing
 #define TIMER_START(timer) clock_gettime(CLOCK_MONOTONIC, &(timer).start)
-
 #define TIMER_STOP(timer)                                                           \
     do                                                                              \
     {                                                                               \
@@ -31,6 +30,7 @@ typedef struct
     const char *label;
 } timer_accum_t;
 
+// Macros to facilitate accumulator usage
 #define ACCUM_INIT(accum, name) \
     do                          \
     {                           \
@@ -38,14 +38,12 @@ typedef struct
         (accum).count = 0;      \
         (accum).label = name;   \
     } while (0)
-
 #define ACCUM_ADD(accum, timer)                 \
     do                                          \
     {                                           \
         (accum).total_ms += (timer).elapsed_ms; \
         (accum).count++;                        \
     } while (0)
-
 #define ACCUM_PRINT(accum)                                             \
     printf("[TOTAL] %-30s: %10.3f ms (avg: %.3f ms, count: %d)\n",     \
            (accum).label, (accum).total_ms,                            \
@@ -63,6 +61,6 @@ extern timer_t_custom g_total_program_time;
 // Function declarations
 void init_timing_accumulators(void);
 void print_timing_summary(void);
-void log_results_to_csv(const char *filename, int num_samples, int num_iterations, double learning_rate, double final_train_acc, double final_test_acc, double training_time_sec, int num_threads);
+void log_results_to_csv(const char *filename, int num_samples, int num_iterations, double learning_rate, double final_train_acc, double final_test_acc, double training_time_sec, int num_threads, int num_processes);
 
 #endif // TIMING_H
