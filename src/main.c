@@ -17,15 +17,15 @@ static void print_usage(const char *prog_name)
 {
     printf("Usage: mpirun -np <num_processes> %s [OPTIONS]\n", prog_name);
     printf("Options:\n");
-    printf("  -n, --samples <num>      Number of samples to use (must be multiple of 100 * num_processes * num_threads, max %d, default %d)\n",
-           MAX_NUM_SAMPLES, DEFAULT_NUM_SAMPLES);
-    printf("  -i, --iterations <num>   Number of training iterations (default %d)\n", DEFAULT_NUM_ITERATIONS);
-    printf("  -p, --print <num>        Print progress every N iterations (default %d)\n", DEFAULT_PRINT_EVERY);
-    printf("  -t, --threads <num>      Number of OpenMP threads per process (default %d)\n", DEFAULT_NUM_THREADS);
-    printf("  -h, --help               Show this help message\n");
+    printf("  -n, --train-samples <num> Number of training samples (max %d, default %d)\n", MAX_TRAINING_SAMPLES, DEFAULT_TRAINING_SAMPLES);
+    printf("                            Must be divisible by BATCH_SIZE (%d) and 90 (for 10 classes, 9:1 split)\n", BATCH_SIZE);
+    printf("                            In other words, must be divisible by 2880\n");
+    printf("  -i, --iterations <num>    Number of training iterations (default %d)\n", DEFAULT_NUM_ITERATIONS);
+    printf("  -p, --print <num>         Print progress every N iterations (default %d)\n", DEFAULT_PRINT_EVERY);
+    printf("  -t, --threads <num>       Number of OpenMP threads per process (default %d)\n", DEFAULT_NUM_THREADS);
+    printf("  -h, --help                Show this help message\n");
     printf("\nExample:\n");
-    printf("  mpirun -np 4 %s -n 16000 -i 500 -p 50 -t 4\n", prog_name);
-    printf("\nNote: The number of MPI processes is set via mpirun -np, not via a program argument.\n");
+    printf("  mpirun -np 4 %s -n 2880 -i 10 -p 1 -t 4\n", prog_name);
 }
 
 int main(int argc, char *argv[])
@@ -41,7 +41,7 @@ int main(int argc, char *argv[])
     TIMER_START(g_total_program_time);
 
     // Default values
-    int num_samples = DEFAULT_NUM_SAMPLES;
+    int num_training_samples = DEFAULT_TRAINING_SAMPLES;
     int num_iterations = DEFAULT_NUM_ITERATIONS;
     int print_every = DEFAULT_PRINT_EVERY;
     int num_threads = DEFAULT_NUM_THREADS;
@@ -56,20 +56,13 @@ int main(int argc, char *argv[])
             MPI_Finalize();
             return 0;
         }
-        else if ((strcmp(argv[i], "-n") == 0 || strcmp(argv[i], "--samples") == 0) && i + 1 < argc)
+        else if ((strcmp(argv[i], "-n") == 0 || strcmp(argv[i], "--train-samples") == 0) && i + 1 < argc)
         {
-            num_samples = atoi(argv[++i]);
-            if (num_samples <= 0 || num_samples > MAX_NUM_SAMPLES)
+            num_training_samples = atoi(argv[++i]);
+            if (num_training_samples <= 0 || num_training_samples > MAX_TRAINING_SAMPLES)
             {
                 if (rank == 0)
-                    fprintf(stderr, "Error: Number of samples must be between 1 and %d\n", MAX_NUM_SAMPLES);
-                MPI_Finalize();
-                return 1;
-            }
-            if (num_samples % (100 * num_processes * num_threads) != 0)
-            {
-                if (rank == 0)
-                    fprintf(stderr, "Error: Number of samples must be a multiple of %d (100 * num_processes * num_threads)\n", 100 * num_processes * num_threads);
+                    fprintf(stderr, "Error: Number of training samples must be between 1 and %d\n", MAX_TRAINING_SAMPLES);
                 MPI_Finalize();
                 return 1;
             }
@@ -119,7 +112,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    // Validate that BATCH_SIZE is divisible by num_processes
+    // BATCH_SIZE must be divisible by num_processes
     if (BATCH_SIZE % num_processes != 0)
     {
         if (rank == 0)
@@ -128,14 +121,28 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    // num_samples must be divisible by 100 * num_processes * num_threads
-    if (num_samples % (100 * num_processes * num_threads) != 0)
+
+    // Training samples must be divisible by BATCH_SIZE
+    if (num_training_samples % BATCH_SIZE != 0)
     {
         if (rank == 0)
-            fprintf(stderr, "Error: num_samples (%d) must be divisible by num_processes (%d) * 100 * num_threads (%d)\n", num_samples, num_processes, num_threads);
+            fprintf(stderr, "Error: Training samples (%d) must be divisible by BATCH_SIZE (%d)\n", num_training_samples, BATCH_SIZE);
         MPI_Finalize();
         return 1;
     }
+
+    // Training samples must be divisible by 90 (9:1 ratio plus balanced 10 classes)
+    if (num_training_samples % 90 != 0)
+    {
+        if (rank == 0)
+            fprintf(stderr, "Error: Training samples (%d) must be divisible by 90\n", num_training_samples);
+        MPI_Finalize();
+        return 1;
+    }
+
+    // Calculate test samples and total samples
+    int num_test_samples = num_training_samples / 9; // 10% of total
+    int num_samples = num_training_samples + num_test_samples;
 
     // Set number of OpenMP threads
     omp_set_num_threads(num_threads);
@@ -144,24 +151,26 @@ int main(int argc, char *argv[])
     TIMER_START(startup_timer);
 
     int samples_per_process = num_samples / num_processes;
-    int train_per_process = (samples_per_process * 9) / 10;
-    int test_per_process = samples_per_process - train_per_process;
+    int train_per_process = num_training_samples / num_processes;
+    int test_per_process = num_test_samples / num_processes;
 
     if (rank == 0)
     {
-        printf("\n========== CIFAR-10 Neural Network (MPI) ==========\n");
+        printf("\n========== CIFAR-10 Neural Network (MPI + OpenMP) ==========\n");
+        printf("Training samples: %d (90%% of total)\n", num_training_samples);
+        printf("Test samples: %d (10%% of total)\n", num_test_samples);
         printf("Total samples: %d\n", num_samples);
         printf("MPI processes: %d\n", num_processes);
         printf("Samples per process: %d (train: %d, test: %d)\n", samples_per_process, train_per_process, test_per_process);
-        printf("Samples per class per process: %d\n", samples_per_process / NUM_CLASSES);
+        printf("Samples per class (global): train: %d, test: %d\n", num_training_samples / NUM_CLASSES, num_test_samples / NUM_CLASSES);
         printf("Mini-batch size: %d (global), %d (per process)\n", BATCH_SIZE, BATCH_SIZE / num_processes);
         printf("Iterations: %d\n", num_iterations);
         printf("Print every: %d iterations\n", print_every);
         printf("OpenMP threads per process: %d\n", num_threads);
-        printf("====================================================\n\n");
+        printf("=============================================================\n\n");
     }
 
-    // ========== LOAD DATA (all ranks load all data) ==========
+    // Load data (all ranks load all data)
     timer_t_custom load_timer;
     TIMER_START(load_timer);
 
@@ -185,7 +194,7 @@ int main(int argc, char *argv[])
         printf("================================\n\n");
     }
 
-    // ========== TRANSFORM DATA (each rank gets its subset) ==========
+    // Transform data (each rank gets its subset)
     timer_t_custom transform_timer;
     TIMER_START(transform_timer);
 
@@ -224,7 +233,9 @@ int main(int argc, char *argv[])
     int L = 3; // number of layers (excluding input)
 
     // Train the model
-    nn_params params = train_model(&data->X_train, &data->Y_train, &data->X_test, &data->Y_test, layer_dims, L, DEFAULT_LEARNING_RATE, num_iterations, print_every, num_samples, num_threads, rank, num_processes);
+    nn_params params = train_model(&data->X_train, &data->Y_train, &data->X_test, &data->Y_test,
+                                   layer_dims, L, DEFAULT_LEARNING_RATE, num_iterations,
+                                   print_every, num_samples, num_threads, rank, num_processes);
 
     // Cleanup
     if (rank == 0)
