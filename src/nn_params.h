@@ -5,7 +5,7 @@
 #include "nn.h"
 
 // Initialize network parameters with He initialization
-nn_params initialize_parameters_he(int *layer_dims, int L);
+nn_params initialize_parameters_he(int *layer_dims, int L, int seed_offset);
 
 // Update parameters using gradient descent
 void update_parameters(nn_params *params, const nn_grads *grads, double learning_rate);

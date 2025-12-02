@@ -4,7 +4,7 @@
 #include "nn_params.h"
 #include "config.h"
 
-nn_params initialize_parameters_he(int *layer_dims, int L)
+nn_params initialize_parameters_he(int *layer_dims, int L, int seed_offset)
 {
     nn_params params;
     params.L = L;
@@ -12,7 +12,7 @@ nn_params initialize_parameters_he(int *layer_dims, int L)
     params.b = (matrix *)malloc(sizeof(matrix) * L);
 
     // Seed random number generator
-    srand(RANDOM_SEED);
+    srand(RANDOM_SEED + seed_offset);
 
     for (int l = 0; l < L; l++)
     {

@@ -119,6 +119,15 @@ int main(int argc, char *argv[])
         }
     }
 
+    // Validate that BATCH_SIZE is divisible by num_processes
+    if (BATCH_SIZE % num_processes != 0)
+    {
+        if (rank == 0)
+            fprintf(stderr, "Error: BATCH_SIZE (%d) must be divisible by num_processes (%d)\n", BATCH_SIZE, num_processes);
+        MPI_Finalize();
+        return 1;
+    }
+
     // num_samples must be divisible by 100 * num_processes * num_threads
     if (num_samples % (100 * num_processes * num_threads) != 0)
     {
@@ -145,6 +154,7 @@ int main(int argc, char *argv[])
         printf("MPI processes: %d\n", num_processes);
         printf("Samples per process: %d (train: %d, test: %d)\n", samples_per_process, train_per_process, test_per_process);
         printf("Samples per class per process: %d\n", samples_per_process / NUM_CLASSES);
+        printf("Mini-batch size: %d (global), %d (per process)\n", BATCH_SIZE, BATCH_SIZE / num_processes);
         printf("Iterations: %d\n", num_iterations);
         printf("Print every: %d iterations\n", print_every);
         printf("OpenMP threads per process: %d\n", num_threads);
